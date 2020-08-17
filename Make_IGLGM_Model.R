@@ -36,7 +36,7 @@ Make_IGLGM_Model <- function(fit_date = Sys.Date(), warmup = 500, iters = 500, c
         refresh = 100
     )
     
-    fit$save_object(file = here("Results", "Models", str_c("Model_", fit_date, ".rds")))
+    fit$save_object(file = here("Results", "Models", "IGLGM", str_c("Model_", fit_date, ".rds")))
     
     
 }
