@@ -50,6 +50,7 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
         "Venezuela"
     )
     
+    
     cut_dates <- tribble(
         ~"location", ~"cutoff",
         "Algeria", "2020-06-06",
@@ -78,7 +79,7 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
         "Morocco", "2020-06-01",
         "Nepal", "2020-07-18",
         "Netherlands", "2020-07-07",
-        "Norway", "2020-07-01",
+        "Norway", "2020-06-01",
         "Panama", "2020-05-20",
         "Peru", "2020-07-06",
         "Poland", "2020-07-03",
@@ -88,7 +89,7 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
         "Serbia", "2020-06-01",
         "Singapore", "2020-07-01",
         "Slovenia", "2020-05-25",
-        "South Korea", "2020-05-01",
+        "South Korea", "2020-04-21",
         "Spain", "2020-06-08",
         "Sweden", "2020-05-23",
         "Switzerland", "2020-05-20",
@@ -105,6 +106,8 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
         "Australia", "2020-06-10",
         "Greece", "2020-07-19",
         "Iceland", "2020-07-23",
+        "Norway", "2020-07-01",
+        "South Korea", "2020-08-11",
         "Turkey", "2020-07-23",
         "Ukraine", "2020-07-14"
     ) %>% 

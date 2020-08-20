@@ -7,6 +7,7 @@ library(cmdstanr)
 library(posterior)
 library(tidybayes)
 library(here)
+library(gganimate)
 
 theme_set(theme_classic(base_size = 12) + 
               theme(legend.position = "none"))
@@ -106,7 +107,7 @@ Make_Figures <- function(fit_date = Sys.Date()) {
     #### Bygju súlur ####
     
     plot_dat %>% 
-        filter(name == "Innlend uppsöfnuð smit", days < 25) %>% 
+        filter(name == "Innlend uppsöfnuð smit", days <= 30) %>% 
         ggplot(aes(days, value, group = wave, fill = wave)) +
         geom_col(position = "dodge", width = 1, col = "white", alpha = 0.8) +
         scale_fill_manual(values = c("#D55E00", "#0072B2")) +
@@ -436,6 +437,90 @@ Make_Figures <- function(fit_date = Sys.Date()) {
     plot_grid(p1, p2, ncol = 1) +
         ggsave(here("Results", "Figures", "latest_spa.png"), device = "png", 
                height = 0.621 * 5, width = 5, scale = 2)
+    
+    
+    #### Dreifing GIF ####
+    
+    plot_dat <- model_d %>% filter(location == "Iceland")
+    info_dat <- model_d %>% filter(location == "Iceland")
+    
+    location_id <- unique(info_dat$location_id)
+    wave_id <- unique(info_dat$wave_id)
+    pop <- unique(info_dat$population)
+    start_cases <- min(info_dat$total_cases)
+    
+    start_date <- min(info_dat$date)
+    
+    end_date <- max(info_dat$date)
+    
+    
+    days_in_data <- max(info_dat$days) + 1
+    
+    
+    day_seq <- seq(0, as.numeric(Sys.Date() + weeks(8) - start_date), by = 1)
+    
+    
+    join_dat <- info_dat %>% 
+        group_by(location_id, wave_id) %>% 
+        summarise(start_day = min(days),
+                  end_day = max(days), .groups = "drop") %>% 
+        ungroup %>% 
+        mutate(start_day = cumsum(lag(end_day + 1, n = 1, default = 0)),
+               end_day = ifelse(wave_id == max(wave_id), 9999, cumsum(end_day)) + 1)
+    
+    set.seed(1)
+    obs_results_total <- par_res %>% 
+        inner_join(join_dat, by = "wave_id") %>% 
+        expand_grid(days = day_seq) %>% 
+        filter(days >= start_day, days < end_day) %>% 
+        mutate(z = beta * (days - alpha - start_day),
+               f = S - S / (1 + nu * exp(z))^(1/nu),
+               dfdt = beta * (S - f) * (1 - ((S - f) / S)^nu) / nu,
+               new_cases = rnbinom(n(), mu = dfdt * pop, size = phi)) %>% 
+        group_by(iter) %>% 
+        mutate(total_cases = as.numeric(cumsum(new_cases * (days > 0))) + start_cases) %>% 
+        ungroup %>% 
+        mutate(type = "obs", waves = "total",
+               date = min(plot_dat$date) + days) %>% 
+        select(iter, days, date, new_cases, total_cases, type, waves)
+    
+    icelandic_dates <- function(x) {
+        months <- c("janúar", "febrúar", "mars", "apríl", "maí", "júní", 
+                    "júlí", "ágúst", "september", "október", "nóvember", "desember")
+        
+        paste0(mday(x), ". ", months[month(x)])
+    }
+    
+    p1 <- obs_results_total %>% 
+        filter(date >= Sys.Date(), date <= Sys.Date() + weeks(3)) %>% 
+        # count(new_cases, week = floor_date(date, "week", week_start = 1)) %>% 
+        mutate(new_cases = pmin(new_cases, 11)) %>% 
+        count(new_cases, date) %>% 
+        group_by(date) %>% 
+        mutate(p = n / sum(n)) %>% 
+        mutate(q = cumsum(p)) %>% 
+        ggplot(aes(new_cases, p, group = "none")) +
+        geom_area(fill = "grey30", col = NA) +
+        scale_x_continuous(breaks = pretty_breaks(8), expand = expansion(mult = 0),
+                           labels = function(x) ifelse(x == 11, ">10", as.character(x))) +
+        scale_y_continuous(breaks = seq(0, 1, 0.1), labels = label_percent(accuracy = 1),
+                           expand = expansion(add = 0), limits = c(0, 1)) +
+        scale_colour_distiller(type = "div") +
+        transition_time(date) +
+        ease_aes() +
+        shadow_mark(alpha = 0.05) +
+        annotation_custom(grob = logo, 
+                          xmin = 7, xmax = 11,
+                          ymin = 0.8, ymax = 1) +
+        labs(title = "Dreifing daglegra smita næstu þrjár vikurnar",
+             subtitle = "Dagsetning: {icelandic_dates(frame_time)}",
+             x = "Fjöldi greindra smita",
+             y = "Líkur") +
+        theme(plot.margin = margin(5, 15, 5, 5))
+    
+    animate(p1, nframes = 40, width = 600, height = 600)
+    
+    anim_save(here("Results", "Figures", "dreifing.gif"))
     
     #### Aus og Isr ####
     
