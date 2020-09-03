@@ -5,3 +5,7 @@
 .DS_Store
 **/*.csv
 **/*.rds
+**/*.pdf
+**/*.png
+**/*.gif
+**/*_threads
