@@ -8,6 +8,7 @@ library(posterior)
 library(tidybayes)
 library(here)
 library(gganimate)
+library(data.table)
 
 theme_set(theme_classic(base_size = 12) + 
               theme(legend.position = "none"))
@@ -117,12 +118,18 @@ Make_Figures <- function(fit_date = Sys.Date()) {
                    col = "#0072B2", size = 1, alpha = 0.8) +
         geom_vline(xintercept = as.numeric(ymd("2020-03-16") - ymd("2020-03-04")), lty = 2,
                    col = "#D55E00", size = 1, alpha = 0.8) +
+        geom_vline(xintercept = as.numeric(ymd("2020-03-24") - ymd("2020-03-04")), lty = 2,
+                   col = "#D55E00", size = 1, alpha = 0.8) +
         geom_text(data = tibble(), 
-                  aes(x = 6.7, y = 300, label = "Samkomur\ntakmarkaðar  \n   við 100 manns         \n      31. júlí"), 
+                  aes(x = 6.5, y = 600, label = "Samkomur\ntakmarkaðar  \n   við 100 manns         \n      31. júlí"), 
                   colour = "#0072B2",
                   inherit.aes = FALSE, size = 4) +
         geom_text(data = tibble(), 
-                  aes(x = 10.7, y = 300, label = "Samkomur\ntakmarkaðar  \n   við 100 manns         \n    16. mars"), 
+                  aes(x = 10.5, y = 600, label = "Samkomur\ntakmarkaðar  \n   við 100 manns         \n   16. mars"), 
+                  colour = "#D55E00",
+                  inherit.aes = FALSE, size = 4) +
+        geom_text(data = tibble(), 
+                  aes(x = 18.5, y = 600, label = "Samkomur\ntakmarkaðar  \n   við 20 manns       \n   24. mars"), 
                   colour = "#D55E00",
                   inherit.aes = FALSE, size = 4) +
         labs(colour = "Bylgja",
@@ -413,8 +420,8 @@ Make_Figures <- function(fit_date = Sys.Date()) {
         scale_fill_brewer() +
         labs(subtitle = "Innlend dagleg smit") +
         annotation_custom(grob = logo, 
-                          xmin = ymd("2020-08-28"), xmax = fit_date + weeks(3),
-                          ymin = 14, ymax = 20) +
+                          xmin = ymd("2020-09-02"), xmax = fit_date + weeks(3),
+                          ymin = 10, ymax = 16) +
         theme(axis.title = element_blank(), 
               plot.margin = margin(5, 5, 5, 16))
     
@@ -437,6 +444,106 @@ Make_Figures <- function(fit_date = Sys.Date()) {
     plot_grid(p1, p2, ncol = 1) +
         ggsave(here("Results", "Figures", "latest_spa.png"), device = "png", 
                height = 0.621 * 5, width = 5, scale = 2)
+    
+    #### Næstu 3 vikur ####
+    
+    plot_dat <- model_d %>% filter(location == "Iceland")
+    info_dat <- model_d %>% filter(location == "Iceland")
+    
+    location_id <- unique(info_dat$location_id)
+    wave_id <- unique(info_dat$wave_id)
+    pop <- unique(info_dat$population)
+    start_cases <- min(info_dat$total_cases)
+    
+    start_date <- min(info_dat$date)
+    
+    end_date <- max(info_dat$date)
+    
+    
+    days_in_data <- max(info_dat$days) + 1
+    
+    
+    day_seq <- seq(0, as.numeric(fit_date + weeks(5) - start_date), by = 1)
+    
+    
+    join_dat <- info_dat %>% 
+        group_by(location_id, wave_id) %>% 
+        summarise(start_day = min(days),
+                  end_day = max(days), .groups = "drop") %>% 
+        ungroup %>% 
+        mutate(start_day = cumsum(lag(end_day + 1, n = 1, default = 0)),
+               end_day = ifelse(wave_id == max(wave_id), 9999, cumsum(end_day)) + 1)
+    
+    
+    
+    plot_dat <- plot_dat %>% filter(wave_id == max(wave_id))
+    info_dat <- info_dat %>% filter(wave_id == max(wave_id))
+    
+    location_id <- unique(info_dat$location_id)
+    wave_id <- unique(info_dat$wave_id)
+    pop <- unique(info_dat$population)
+    start_cases <- min(info_dat$total_cases)
+    
+    start_date <- min(info_dat$date)
+    
+    end_date <- max(info_dat$date)
+    
+    
+    days_in_data <- max(info_dat$days) + 1
+    
+    
+    day_seq <- seq(0, as.numeric(fit_date + weeks(5) - start_date), by = 1)
+    
+    join_dat <- info_dat %>% 
+        group_by(location_id, wave_id) %>% 
+        summarise(start_day = min(days),
+                  end_day = max(days), .groups = "drop") %>% 
+        ungroup %>% 
+        mutate(start_day = cumsum(lag(end_day + 1, n = 1, default = 0)),
+               end_day = ifelse(wave_id == max(wave_id), 9999, cumsum(end_day)) + 1)
+    
+    
+    plot_dat <- par_res %>% 
+        inner_join(join_dat, by = "wave_id") %>% 
+        expand_grid(days = day_seq) %>% 
+        filter(days >= start_day, days < end_day) %>% 
+        mutate(z = beta * (days - alpha - start_day),
+               f = S - S / (1 + nu * exp(z))^(1/nu),
+               dfdt = beta * (S - f) * (1 - ((S - f) / S)^nu) / nu,
+               new_cases = rnbinom(n(), mu = dfdt * pop, size = phi)) %>% 
+        mutate(date = min(plot_dat$date) + days) %>% 
+        select(date, iter, new_cases) %>% 
+        filter(date > Sys.Date(), date <= Sys.Date() + 21) %>% 
+        group_by(iter) %>% 
+        summarise(total_cases = sum(new_cases), .groups = "drop") %>% 
+        arrange(total_cases) %>% 
+        mutate(q = row_number() / n())
+    
+    quantiles <- plot_dat %>% 
+        expand_grid(prob = c(0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975)) %>% 
+        group_by(prob) %>% 
+        summarise(est = quantile(total_cases, prob)) %>% 
+        distinct(prob, est)
+    
+    
+    plot_dat %>% 
+        filter(q <= 0.99) %>% 
+        ggplot(aes(total_cases, q)) +
+        geom_smooth(se = 0, col = "black") +
+        geom_segment(data = quantiles, inherit.aes = F,
+                     aes(x = est, y = prob, xend = est, yend = 0), lty = 2) +
+        geom_segment(data = quantiles, inherit.aes = F,
+                     aes(x = est, y = prob, xend = 0, yend = prob), lty = 2) +
+        scale_y_continuous(labels = label_percent(accuracy = 0.1), expand = expansion(mult = 0), breaks = unique(quantiles$prob)) +
+        scale_x_continuous(expand = expansion(mult = 0), 
+                           breaks = unique(quantiles$est),
+                           labels = round(unique(quantiles$est))) +
+        coord_cartesian(ylim = c(0, 1)) +
+        labs(x = "Fjöldi smita næstu þrjár vikur",
+             y = "P(X < x)") +
+        ggsave(here("Results", "Figures", "smit_naestu_3_vikur.png"), device = "png", 
+               height = 0.621 * 5, width = 5, scale = 2.5)
+    
     
     
     #### Dreifing GIF ####
@@ -521,6 +628,37 @@ Make_Figures <- function(fit_date = Sys.Date()) {
     animate(p1, nframes = 40, width = 600, height = 600)
     
     anim_save(here("Results", "Figures", "dreifing.gif"))
+    
+    p1 <- obs_results_total %>% 
+        filter(date >= Sys.Date(), date <= Sys.Date() + weeks(3)) %>% 
+        # count(new_cases, week = floor_date(date, "week", week_start = 1)) %>% 
+        count(new_cases, date) %>% 
+        group_by(date) %>% 
+        mutate(p = n / sum(n)) %>% 
+        mutate(q = cumsum(p)) %>% 
+        filter(new_cases <= 10) %>% 
+        ggplot(aes(new_cases, 1 - q, group = "none")) +
+        geom_area(fill = "grey30", col = NA) +
+        scale_x_continuous(breaks = pretty_breaks(8), expand = expansion(mult = 0),
+                           labels = function(x) ifelse(x == 11, ">10", as.character(x))) +
+        scale_y_continuous(breaks = seq(0, 1, 0.1), labels = label_percent(accuracy = 1),
+                           expand = expansion(add = 0), limits = c(0, 1)) +
+        scale_colour_distiller(type = "div") +
+        transition_time(date) +
+        ease_aes() +
+        shadow_mark(alpha = 0.05) +
+        annotation_custom(grob = logo, 
+                          xmin = 7, xmax = 11,
+                          ymin = 0.8, ymax = 1) +
+        labs(title = "Dreifing lágmarksfjölda daglegra smita næstu þrjár vikurnar",
+             subtitle = "Dagsetning: {icelandic_dates(frame_time)}",
+             x = "Fjöldi greindra smita",
+             y = "Líkur á að sjá fleiri en X smit") +
+        theme(plot.margin = margin(5, 15, 5, 5))
+    
+    animate(p1, nframes = 40, width = 600, height = 600)
+    
+    anim_save(here("Results", "Figures", "survival.gif"))
     
     #### Aus og Isr ####
     
@@ -858,5 +996,120 @@ Make_Figures <- function(fit_date = Sys.Date()) {
     plot_grid(p1, p2, ncol = 1) +
         ggsave(here("Results", "Figures", "den_ger.png"), device = "png", 
                height = 0.621 * 5, width = 5, scale = 2)
+    
+    #### Nýgengi ####
+    
+    source("Make_Stan_Data.R")
+    
+    model_d <- Make_Stan_Data(min_case_rate = 0, return_list = F, save_df = F)
+    
+    model_d %>% 
+        select(location, new_cases, date, population) %>% 
+        group_by(location) %>% 
+        mutate(biweekly_cases = frollsum(new_cases, n = 14, align = "right", fill = 0),
+               biweekly_incidence = biweekly_cases / population * 100000) %>% 
+        group_by(location) %>% 
+        mutate(y = ifelse(row_number() == n(), biweekly_incidence[n()], NA)) %>% 
+        ungroup %>% 
+        filter(location %in% c("France", "Germany")) %>%  
+        mutate(location = fct_recode(location,
+                                     "Frakkland" = "France",
+                                     "Þýskaland" = "Germany")) %>% 
+        ggplot(aes(date, biweekly_incidence, group = location, colour = location)) +
+        geom_line(size = 0.9) +
+        geom_text(aes(x = date + 15, y = y, label = location), size = 5) +
+        annotation_custom(grob = logo, 
+                          xmin = ymd("2020-08-25"), ymd("2020-09-25"),
+                          ymin = 110, ymax = 140) +
+        scale_colour_brewer(type = "qual", palette = "Set1") +
+        scale_x_date(limits = c(ymd("2020-02-25"), Sys.Date() + 28), 
+                     labels = icelandic_dates,
+                     date_breaks = "month") +
+        scale_y_continuous(limits = c(0, 150), expand = expansion(mult = 0)) +
+        theme(axis.title = element_blank()) +
+        ggsave(here("Results", "Figures", "incidence_fra_ger.png"), device = "png",
+               width = 5, height = 0.621 * 5, scale = 2)
+    
+    
+    
+    model_d %>% 
+        select(location, new_cases, date, population) %>% 
+        group_by(location) %>% 
+        mutate(biweekly_cases = frollsum(new_cases, n = 14, align = "right"),
+               biweekly_incidence = biweekly_cases / population * 100000) %>% 
+        group_by(location) %>% 
+        mutate(y = ifelse(row_number() == n(), biweekly_incidence[n()], NA),
+               y = case_when(location == "Sweden" ~ y + 12,
+                             location == "Denmark" ~ y + 8,
+                             location == "Iceland" ~ y + 5,
+                             location == "Norway" ~ y + 3,
+                             location == "Finland" ~ y + 1,
+                             TRUE ~ y)) %>% 
+        ungroup %>% 
+        filter(location %in% c("Norway", "Denmark", "Finland", "Sweden", "Iceland")) %>%  
+        mutate(location = fct_recode(location,
+                                     "Svíþjóð" = "Sweden",
+                                     "Danmörk" = "Denmark",
+                                     "Ísland" = "Iceland",
+                                     "Noregur" = "Norway",
+                                     "Finnland" = "Finland"),
+               location = fct_relevel(location, "Danmörk", "Finnand", "Ísland")) %>% 
+    ggplot(aes(date, biweekly_incidence, group = location, colour = location)) +
+        geom_line(size = 0.9) +
+        geom_text(aes(x = date + 15, y = y, label = location), size = 5) +
+        annotation_custom(grob = logo, 
+                          xmin = ymd("2020-08-25"), ymd("2020-09-25"),
+                          ymin = 180, ymax = 230) +
+        scale_colour_brewer(type = "qual", palette = "Set1") +
+        scale_x_date(limits = c(ymd("2020-02-25"), Sys.Date() + 25), 
+                     labels = icelandic_dates,
+                     date_breaks = "month") +
+        scale_y_continuous(limits = c(0, 250), expand = expansion(mult = 0)) +
+        theme(axis.title = element_blank()) +
+        ggsave(here("Results", "Figures", "incidence_nordic.png"), device = "png",
+               width = 5, height = 0.621 * 5, scale = 2)
+    
+    
+    model_d %>% 
+        select(location, new_cases, date, population) %>% 
+        group_by(location) %>% 
+        mutate(biweekly_cases = frollsum(new_cases, n = 14, align = "right"),
+               biweekly_incidence = biweekly_cases / population * 100000) %>% 
+        group_by(location) %>% 
+        mutate(y = ifelse(row_number() == n(), biweekly_incidence[n()], NA),
+               y = case_when(location == "Spain" ~ y,
+                             location == "United Kingdom" ~ y + 5,
+                             location == "Italy" ~ y - 4,
+                             location == "Iceland" ~ y + 1,
+                             TRUE ~ y),
+               x = case_when(row_number() != n() ~ NA_Date_,
+                             TRUE ~ date),
+               x = case_when(location == "Spain" ~ x + 13,
+                             location == "United Kingdom" ~ x + 10,
+                             location == "Italy" ~ x + 9,
+                             location == "Iceland" ~ x + 9,
+                             TRUE ~ x)) %>% 
+        ungroup %>% 
+        filter(location %in% c("Italy", "Spain", "United Kingdom", "Iceland")) %>%  
+        mutate(location = fct_recode(location,
+                                     "Spánn" = "Spain",
+                                     "Bretland" = "United Kingdom",
+                                     "Ítalía" = "Italy",
+                                     "Ísland" = "Iceland"),
+               location = fct_relevel(location, "Spánn", "Ísland")) %>% 
+        ggplot(aes(date, biweekly_incidence, group = location, colour = location)) +
+        geom_line(size = 0.9) +
+        geom_text(aes(x = x, y = y, label = location), size = 5) +
+        annotation_custom(grob = logo, 
+                          xmin = ymd("2020-08-25"), ymd("2020-09-25"),
+                          ymin = 240, ymax = 300) +
+        scale_colour_brewer(type = "qual", palette = "Set1") +
+        scale_x_date(limits = c(ymd("2020-02-25"), Sys.Date() + 20), 
+                     labels = icelandic_dates,
+                     date_breaks = "month") +
+        scale_y_continuous(limits = c(0, 300), expand = expansion(mult = 0)) +
+        theme(axis.title = element_blank()) +
+        ggsave(here("Results", "Figures", "incidence_spain_uk_italy.png"), device = "png",
+               width = 5, height = 0.621 * 5, scale = 2)
     
 }

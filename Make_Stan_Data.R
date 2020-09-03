@@ -1,6 +1,8 @@
 Make_Stan_Data <- function(min_case_rate = 0.02, 
                            countries = NULL, 
-                           stop_date = Sys.Date()) {
+                           stop_date = Sys.Date(), 
+                           return_list = T, save_df = T,
+                           innanlands = T) {
     options(tidyverse.quiet = TRUE)
     
     library(tidyverse, verbose = F, warn.conflicts = F, attach.required = T)
@@ -65,7 +67,7 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
         "Denmark", "2020-06-20",
         "Ethiopia", "2020-07-06",
         "Finland", "2020-06-20",
-        "France", "2020-05-11",
+        "France", "2020-06-01",
         "Germany", "2020-06-01",
         "Greece", "2020-05-26",
         "Iceland", "2020-05-05",
@@ -104,9 +106,13 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
     cut_dates2 <- tribble(
         ~"location", ~"cutoff2",
         "Australia", "2020-06-10",
+        "Austria", "2020-08-01",
+        "Azerbaijan", "2020-08-11",
+        "Croatia", "2020-08-05",
         "Greece", "2020-07-19",
         "Iceland", "2020-07-23",
-        "Norway", "2020-07-01",
+        "Norway", "2020-07-19",
+        "Qatar", "2020-08-03",
         "South Korea", "2020-08-11",
         "Turkey", "2020-07-23",
         "Ukraine", "2020-07-14"
@@ -128,9 +134,13 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
                date, 
                new_cases, total_cases, 
                new_deaths, total_deaths, 
-               population, population_density, median_age, gdp_per_capita, diabetes_prevalence) %>% 
+               population, population_density, median_age, gdp_per_capita, diabetes_prevalence)
+    
+    if (innanlands) d <- d %>% 
         filter(country %in% countries, country != "Iceland") %>% 
-        bind_rows(iceland_d) %>% 
+        bind_rows(iceland_d) 
+    
+    d <- d %>% 
         arrange(country, location, date) %>% 
         group_by(location) %>% 
         mutate(rolling_new_cases = data.table::frollmean(pmax(new_cases, 0), n = 7, align = "right")) %>% 
@@ -207,7 +217,13 @@ Make_Stan_Data <- function(min_case_rate = 0.02,
                       wave_length = wave_length,
                       grainsize = 1)
     
-    write_csv(d, here("Results", "Data", str_c("COVID_Data_", stop_date, ".csv")))
+    if (save_df) {
+        write_csv(d, here("Results", "Data", str_c("COVID_Data_", stop_date, ".csv")))
+        write_rds(d, here("Results", "Data", str_c("COVID_Data_", stop_date, ".rds")))
+    }
+    
+    if (return_list) return(stan_data)
+    else return(d)
     
     return(stan_data)
 }

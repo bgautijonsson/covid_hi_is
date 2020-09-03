@@ -19,7 +19,7 @@ functions {
                       vector[N_waves] log_beta = to_vector(pre_pars[2]);
                       vector[N_waves] beta = exp(log_beta);
                       vector[N_waves] nu = exp(to_vector(pre_pars[3]));
-                      vector[N_waves] log_S = log(inv_logit(to_vector(pre_pars[4])));
+                      vector[N_waves] log_S = log_inv_logit(to_vector(pre_pars[4]));
                       
                       out += normal_lpdf(log_phi_inv[start:end] | mu_phi_inv, sigma_phi_inv);
                       

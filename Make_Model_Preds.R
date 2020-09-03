@@ -182,5 +182,6 @@ Make_Model_Preds <- function(fit_date = Sys.Date()) {
         map_df(get_preds, pred_date = Sys.Date() + years(1))
     
     write_csv(results, here("Results", "Predictions", str_c("Predictions_", fit_date, ".csv")))
+    write_rds(results, here("Results", "Predictions", str_c("Predictions_", fit_date, ".rds")))
     
 }

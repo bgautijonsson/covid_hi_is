@@ -3,6 +3,7 @@ library(rstan)
 library(lubridate)
 library(readxl)
 library(here)
+library(cmdstanr)
 
 options(mc.cores = parallel::detectCores())
 parallel:::setDefaultClusterOptions(setup_strategy = "sequential")
