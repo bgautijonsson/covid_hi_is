@@ -153,8 +153,6 @@ p3 <- spread_draws(m, y_hat[day]) %>%
           plot.margin = margin(5, 5, 5, 11),
           legend.title = element_blank()) 
 
-plot_grid(p3, p4, ncol = 1)
-
 p4 <- spread_draws(m, R[day]) %>% 
     group_by(day) %>% 
     summarise(lower_50 = quantile(R, 0.25),
@@ -191,6 +189,8 @@ p4 <- spread_draws(m, R[day]) %>%
             subtitle = latex2exp::TeX("$R_t$")) +
     theme(axis.title = element_blank(),
           plot.margin = margin(5, 5, 5, 14))
+
+plot_grid(p3, p4, ncol = 1)
 
 plot_dat <- spread_draws(m, R[day]) %>% 
     group_by(day) %>% 
