@@ -2,6 +2,7 @@ data {
   int<lower = 0> N_days;
   int<lower = 0> local[N_days]; // Local new cases
   vector<lower = 0>[N_days] total; // Total new cases
+  vector<lower=0>[N_days] prop_quarantine;
   real<lower = 0> SI_shape; // 1.54 calculated from Icelandic data (Flaxman et al. use 4.5)
   real<lower = 0> SI_rate; // 0.28 calculated from Icelandic data (Flaxman et al. use 0.6)
 }
@@ -20,7 +21,7 @@ transformed data {
   // Calculate expectd number of new cases if R_t = 1 by convolving SI with past total new cases
   // The division is used such that the truncated SI at the start of the data sums to 1
   for (t in 2:N_days) {
-    lambda[t - 1] = dot_product(head(total, t - 1), tail(SI_rev, t - 1)) / sum(tail(SI_rev, t - 1));
+    lambda[t - 1] = dot_product(head((1-prop_quarantine).*total, t - 1), tail(SI_rev, t - 1) / sum(tail(SI_rev, t - 1)));
   }
   
   log_lambda = log(lambda);
@@ -79,7 +80,6 @@ generated quantities {
   // Calculate R_t and y_hat for model checking
   vector[N_days - 1] R = exp(log_R);
   int y_hat[N_days - 1] = neg_binomial_2_log_rng(log_R + log_lambda, phi);
-  
 }
 
 
