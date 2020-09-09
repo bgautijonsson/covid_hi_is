@@ -1,3 +1,19 @@
+library(cmdstanr)
+library(rstan)
+library(posterior)
+library(broom.mixed)
+library(tidyverse)
+library(cowplot)
+library(scales)
+library(lubridate)
+library(plotly)
+library(cmdstanr)
+library(posterior)
+library(tidybayes)
+library(here)
+library(gganimate)
+library(data.table)
+
 #### Help functions ####
 make_preds <- function(d, ...) {
     for (t in seq(N_days, nrow(d))) {
@@ -18,7 +34,7 @@ get_SI_vec <- function(N_days,shape=1.54,rate=0.28){
     return(SI_dat$p)
 }
 
-calculate_labmda <- function(total,SI){
+calculate_lambda <- function(total,SI){
     N_days <- length(total)
     lambda <- numeric(N_days)
     for (t in 2:N_days) {
@@ -36,8 +52,9 @@ scenario <- function(date=Sys.Date(),R_fun,prop_extra,num_border_tests=2000,pred
         mutate(date = ymd(date),
                total = local + imported) %>% 
         filter(date >= ymd("2020-02-28"))
+    N_days <- nrow(d)
     SI <- get_SI_vec(nrow(d))
-    lambda <- calculate_labmda(d$total,SI)
+    lambda <- calculate_lambda(d$total,SI)
     lambda <- c(lambda,rep(0,pred_days))
     R_draws <- spread_draws(m, R[day]) %>% 
                 group_by(day) %>% 
