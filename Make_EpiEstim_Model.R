@@ -12,11 +12,10 @@ parallel:::setDefaultClusterOptions(setup_strategy = "sequential")
 Make_EpiEstim_Model <- function(fit_date = Sys.Date(),use_quarantine=T, warmup = 500, iters = 500, chains = 4) {
     
     d <- read_csv("https://docs.google.com/spreadsheets/d/1xgDhtejTtcyy6EN5dbDp5W3TeJhKFRRgm6Xk0s0YFeA/export?format=csv&gid=1788393542") %>%
-        select(date = Dagsetning, local = Innanlands_Smit,border_1=Landamaeri_Smit_1,border_2=Landamaeri_Smit_2, imported = Innflutt_Smit,prop_quarantine=Hlutf_Sottkvi,num_quarantine=) %>% 
+        select(date = Dagsetning, local = Innanlands_Smit,border_1=Landamaeri_Smit_1,border_2=Landamaeri_Smit_2, imported = Innflutt_Smit,prop_quarantine=Hlutf_Sottkvi,num_quarantine=Fjoldi_Sottkvi) %>% 
         mutate(date = ymd(date),
                total = local + imported,
-               
-               prop_quarantine=if_else(use_quarantine & (local+border_1+border_2)!=0),(num_quarantine+border_1+border_2)/(local+border_1+border_2) else rep(0,n())) %>% 
+               prop_quarantine=if_else(use_quarantine & total!=0,(num_quarantine+border_1+border_2)/total,0)) %>% 
         filter(date >= ymd("2020-02-28"))
     
     # shape <- 4.5

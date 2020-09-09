@@ -423,8 +423,6 @@ p6 <- plot_dat %>%
     theme(axis.title = element_blank(),
           plot.margin = margin(5, 5, 5, 8))
 
-
-
 plot_grid(p5, p6, ncol = 1)
 
 
