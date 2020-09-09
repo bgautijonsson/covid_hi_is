@@ -1,57 +1,51 @@
 library(shiny)
-library(cmdstanr)
-library(rstan)
-library(posterior)
-library(broom.mixed)
-library(tidyverse)
-library(cowplot)
-library(scales)
-library(lubridate)
-library(plotly)
-library(cmdstanr)
-library(posterior)
-library(tidybayes)
-library(here)
-library(gganimate)
-library(data.table)
+library(gridExtra)
 
-future_R <- function(R_t) {
-    1*R_t
+source('../Scenario_EpiEstim.R')
+
+future_R <- function(R_t,t) {
+    R_t/(log(t+9)-1)
 }
 
 #Setting up the Shiny Server
 shinyServer(function(input, output, session) {
-    epidemia_plot<-eventReactive(input$go,{ 
+    epidemia_plot5<-eventReactive(input$go,{ 
         if(input$test == "first") prop_extra = 3/4500
         else if(input$test == 'none') prop_extra = 15/4500
         else if(input$test == 'second_ice') prop_extra = 2/4500
         
-        plot_dat <- scenario(R_fun = future_R,prop_extra=prop_extra,pred_days=42,use_quarantine=input$quarantine)
+        plot_dat <- scenario(date=as.Date('2020-09-09'), R_fun = future_R,prop_extra=prop_extra,pred_days=42,use_quarantine=input$quarantine)
         
-        p6 <- plot_dat %>% 
-            filter(name == "R") %>% 
+        p5 <- plot_dat %>% 
+            filter(name == "y_hat") %>% 
             ggplot(aes(date, ymin = lower, ymax = upper)) +
             geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
-            geom_hline(yintercept = 1, lty = 2) +
+            geom_point(data = d %>% rename(y_hat = local) %>% pivot_longer(c(y_hat)),
+                       inherit.aes = F, aes(x = date, y = value)) +
             geom_vline(xintercept = Sys.Date(), lty = 2) +
-            scale_x_date(date_breaks = "month", date_labels = "%B %d",
+            scale_x_date(date_breaks = "month", 
+                         date_labels = "%B %d",
                          limits = c(ymd("2020-02-27"), Sys.Date() + 1 + pred_days), 
                          expand = expansion(add = 0)) +
-            scale_y_continuous(expand = expansion(mult = 0.01), breaks = pretty_breaks(8)) +
+            scale_y_continuous(expand = expansion(mult = 0.01)) +
             scale_fill_brewer() +
-            ggtitle(label = waiver(),
-                    subtitle = latex2exp::TeX("$R_t$")) +
+            labs(subtitle = "New local cases") +
+            theme(axis.title = element_blank()) +
             theme(axis.title = element_blank(),
-                  plot.margin = margin(5, 5, 5, 8))
+                  axis.ticks.x = element_blank(),
+                  axis.text.x = element_blank(),
+                  plot.margin = margin(5, 5, 5, 5),
+                  legend.title = element_blank()) 
         
-        p6
-    })   
+        return(p5)
+    }) 
     
     output$epidemia_plot <- renderPlot({
-        if (is.null(epidemia_plot()))
+        p = epidemia_plot5()
+        if (is.null(p))
             return(NULL)
-        
-        epidemia_plot()
+    
+        p        
     })
 
     output$downloadPlot <- downloadHandler(
