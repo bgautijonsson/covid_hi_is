@@ -4,7 +4,7 @@ library(gridExtra)
 shinyUI(fluidPage( 
     includeCSS("styles.css"),
     
-    titlePanel("Epidemia Plot Generator"),
+    titlePanel("COVID-19 Sviðsmyndir"),
     sidebarLayout(
         sidebarPanel(
             h4('Aðgerð yfirvalda'),
@@ -19,10 +19,10 @@ shinyUI(fluidPage(
             br(),
             br(),
             br(),
-            downloadButton('downloadPlot', label = "Download plot as PDF"),
+            downloadButton('downloadPlot', label = "Hlaða niður mynd sem PDF"),
             br(),
             br(),
-            downloadButton('downloadCSV', label='Download estimate as CSV')
+            downloadButton('downloadCSV', label='Hlaða niður gögnum sem XLSX')
         ),
         
         mainPanel(
