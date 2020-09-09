@@ -9,7 +9,30 @@ future_R <- function(R_t,t) {
 
 #Setting up the Shiny Server
 shinyServer(function(input, output, session) {
-    epidemia_plot5<-eventReactive(input$go,{ 
+    prepare_data <- reactive({
+        date <- as.Date('2020-09-09')
+        mod <- read_rds(here("Results", "Models", "EpiEstim", str_c("Model_",date, if_else(use_quarantine,'_w_quarantine',''),".rds")))
+        m <- mod$draws() %>% as_draws_df
+        d <- read_csv("https://docs.google.com/spreadsheets/d/1xgDhtejTtcyy6EN5dbDp5W3TeJhKFRRgm6Xk0s0YFeA/export?format=csv&gid=1788393542",col_types=cols()) %>%
+            select(date = Dagsetning, local = Innanlands_Smit,border_1=Landamaeri_Smit_1,border_2=Landamaeri_Smit_2,
+                   imported = Innflutt_Smit,num_quarantine=Fjoldi_Sottkvi) %>% 
+            mutate(date = ymd(date),
+                   total = local + imported,
+                   prop_quarantine=if_else(use_quarantine & total!=0,(num_quarantine+border_1+border_2)/total,0)) %>% 
+            filter(date >= ymd("2020-02-28"))
+        SI <- get_SI_vec(nrow(d))
+        d <- mutate(d,lambda=calculate_lambda(total,SI,prop_quarantine))
+        R_draws <- spread_draws(m, R[day]) %>% 
+                    group_by(day) %>% 
+                    mutate(iter = row_number()) %>%
+                    ungroup %>% 
+                    select(iter, day, R)
+        return('R_draws'=R_draws,'d'=d)
+    }) 
+    
+    get_scenario_dat<-eventReactive(input$go,{
+        dat_list <- prepare_data()
+        
         if(input$test == "first") prop_extra = 3/4500
         else if(input$test == 'none') prop_extra = 15/4500
         else if(input$test == 'second_ice') prop_extra = 2/4500
@@ -44,7 +67,6 @@ shinyServer(function(input, output, session) {
         p = epidemia_plot5()
         if (is.null(p))
             return(NULL)
-    
         p        
     })
 
