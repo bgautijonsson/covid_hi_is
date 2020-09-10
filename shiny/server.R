@@ -3,15 +3,18 @@ library(gridExtra)
 
 source('../Scenario_EpiEstim.R')
 
+# future_R <- function(R_t,t) {
+#     R_t/(log(t+20)-2)
+# }
 future_R <- function(R_t,t) {
-    R_t/(log(t+20)-2)
+    R_t
 }
 
 #Setting up the Shiny Server
 shinyServer(function(input, output, session) {
     prepare_data <- reactive({
         date <- as.Date('2020-09-09')
-        mod <- read_rds(here("Results", "Models", "EpiEstim", str_c("Model_",date, if_else(input$quarantine,'_w_quarantine',''),".rds")))
+        mod <- read_rds(here("Results", "Models", "EpiEstim", str_c("Model_",date,'_w_quarantine','',".rds")))
         m <- mod$draws() %>% as_draws_df
         d <- read_csv("https://docs.google.com/spreadsheets/d/1xgDhtejTtcyy6EN5dbDp5W3TeJhKFRRgm6Xk0s0YFeA/export?format=csv&gid=1788393542",col_types=cols()) %>%
             select(date = Dagsetning, local = Innanlands_Smit,border_1=Landamaeri_Smit_1,border_2=Landamaeri_Smit_2,
@@ -27,19 +30,21 @@ shinyServer(function(input, output, session) {
                     mutate(iter = row_number()) %>%
                     ungroup %>% 
                     select(iter, day, R)
-        return(list('R_draws'=R_draws,'d'=d))
+        return(list('m'=m,'R_draws'=R_draws,'d'=d))
     }) 
     
     get_scenario_dat<-eventReactive(input$go,{
         theme_set(theme_classic(base_size = 12) + 
                       theme(legend.position = "none"))
+        pred_days <- 42
+        date <- as.Date('2020-09-09')
         dat_list <- prepare_data()
         
-        prop_extra = 0
+        prop_imported = 0
         
-        if(input$test == "first") prop_extra = 0.000812513
-        else if(input$test == 'none') prop_extra = 0.001290147
-        else if(input$test == 'second_ice') prop_extra = 0.000510378
+        if(input$test == "first") prop_imported = 0.000812513
+        else if(input$test == 'none') prop_imported = 0.001290147
+        else if(input$test == 'second_ice') prop_imported = 0.000510378
         
         future_prop_quarantine = rep(0,pred_days-1)
         if(input$quarantine) {
@@ -48,7 +53,7 @@ shinyServer(function(input, output, session) {
             }
         }
         
-        plot_dat <- scenario(d=dat_list$d, R_draws=dat_list$R_draws, R_fun = future_R, future_prop_quarantine=future_prop_quarantine, prop_extra=prop_extra,pred_days=42,use_quarantine=input$quarantine)
+        plot_dat <- scenario(m=dat_list$m,d=dat_list$d, R_draws=dat_list$R_draws, R_fun = future_R, future_prop_quarantine=future_prop_quarantine, prop_imported=prop_imported,pred_days=42,use_quarantine=T)
         
         p5 <- plot_dat %>% 
             filter(name == "y_hat") %>% 
@@ -56,14 +61,14 @@ shinyServer(function(input, output, session) {
             geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
             geom_point(data = d %>% rename(y_hat = local) %>% pivot_longer(c(y_hat)),
                        inherit.aes = F, aes(x = date, y = value)) +
-            geom_vline(xintercept = Sys.Date(), lty = 2) +
+            geom_vline(xintercept = date, lty = 2) +
             scale_x_date(date_breaks = "month", 
                          date_labels = "%B %d",
-                         limits = c(ymd("2020-02-27"), Sys.Date() + 1 + pred_days), 
+                         limits = c(ymd("2020-02-27"), date + 1 + pred_days), 
                          expand = expansion(add = 0)) +
             scale_y_continuous(expand = expansion(mult = 0.01)) +
             scale_fill_brewer() +
-            labs(subtitle = "New local cases") +
+            labs(subtitle = "Ný smit") +
             theme(axis.title = element_blank(),
                   plot.margin = margin(5, 5, 5, 5),
                   legend.title = element_blank()) 
@@ -73,10 +78,10 @@ shinyServer(function(input, output, session) {
             ggplot(aes(date, ymin = lower, ymax = upper)) +
             geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
             geom_hline(yintercept = 1, lty = 2) +
-            geom_vline(xintercept = Sys.Date(), lty = 2) +
+            geom_vline(xintercept = date, lty = 2) +
             scale_x_date(date_breaks = "month", 
                          date_labels = "%B %d",
-                         limits = c(ymd("2020-02-27"), Sys.Date() + 1 + pred_days), 
+                         limits = c(ymd("2020-02-27"), date + 1 + pred_days), 
                          expand = expansion(add = 0)) +
             scale_y_continuous(expand = expansion(mult = 0.01), breaks = pretty_breaks(8)) +
             scale_fill_brewer() +
@@ -85,22 +90,23 @@ shinyServer(function(input, output, session) {
             theme(axis.title = element_blank(),
                   plot.margin = margin(5, 5, 5, 8))
         
-        median_plot <- plot_dat %>% 
-            filter(name == "y_hat", date>=Sys.Date(), prob==50) %>% 
-            ggplot(aes(date, (lower+upper)/2)) +
-            geom_line(col = "#0065ad", alpha = 0.7) +
-            geom_vline(xintercept = Sys.Date(), lty = 2) +
-            scale_x_date(date_breaks = 'day', 
-                         date_labels = "%B %d",
-                         limits = c(Sys.Date(), Sys.Date() + 1 + pred_days), 
-                         expand = expansion(add = 0)) +
-            scale_y_continuous(expand = expansion(mult = 0.01)) +
-            labs(subtitle = "New local cases") +
-            theme(axis.title = element_blank(),
-                  plot.margin = margin(5, 5, 5, 5),
-                  legend.title = element_blank()) 
-        
-        plot_grid(p5, p6, median_plot, ncol = 1)
+        # median_dat <- plot_dat %>% 
+        #                 filter(name == "y_hat", date>=date, prob==50) %>%
+        #                 mutate(cum_cases=cumsum((lower+upper)/2))
+        # 
+        # median_plot <- ggplot(median_dat,aes(date, cum_cases)) +
+        #                 geom_line(col = "#0065ad", alpha = 0.7) +
+        #                 geom_vline(xintercept = date, lty = 2) +
+        #                 scale_x_date(breaks = seq(date,date+pred_days+1,by=7), 
+        #                              date_labels = "%B %d",
+        #                              limits = c(date, date + 1 + pred_days), 
+        #                              expand = expansion(add = 0)) +
+        #                 labs(subtitle = "Uppöfnuð spáð smit")+
+        #                 theme(axis.title = element_blank(),
+        #                       plot.margin = margin(5, 5, 5, 5),
+        #                       legend.title = element_blank()) 
+                    
+        plot_grid(p5, p6, ncol = 1)
     }) 
     
     output$epidemia_plot <- renderPlot({
@@ -112,7 +118,7 @@ shinyServer(function(input, output, session) {
 
     output$downloadPlot <- downloadHandler(
         filename<-function(){
-            paste(gsub(" ","-",input$title),"-",format(Sys.Date(), "%b-%d-%Y"), ".pdf", sep="")
+            paste(gsub(" ","-",input$title),"-",format(date, "%b-%d-%Y"), ".pdf", sep="")
         },
         content=function(file=NULL) {
             pdf(file,width=9,height=6)

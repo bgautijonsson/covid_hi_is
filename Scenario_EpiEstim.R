@@ -45,7 +45,7 @@ calculate_lambda <- function(total,SI,prop_quarantine){
 }
 
 
-scenario <- function(d,R_draws,R_fun,prop_extra,future_prop_quarantine=rep(0,pred_days-1),num_border_tests=2000,pred_days=42,use_quarantine=T){
+scenario <- function(m,d,R_draws,R_fun,prop_imported,future_prop_quarantine=rep(0,pred_days-1),num_border_tests=2000,pred_days=42,use_quarantine=T){
     N_iter <- max(R_draws$iter)
     N_days <- nrow(d)
     last_R <- R_draws %>% 
@@ -62,12 +62,12 @@ scenario <- function(d,R_draws,R_fun,prop_extra,future_prop_quarantine=rep(0,pre
                 group_by(iter) %>% 
                 mutate(prop_quarantine=c(d$prop_quarantine,future_prop_quarantine),
                        lambda = c(d$lambda,rep(0,pred_days-1)),
-                       mu_hat = R * lambda+if_else(day>N_days,as.numeric(rbinom(n(),size=num_border_tests,prob = prop_extra)),0)) %>% 
+                       mu_hat = R * lambda+(day>N_days)*as.numeric(rbinom(n(),size=num_border_tests,prob = prop_imported))) %>% 
                 # filter(iter %in% 1:100) %>% 
                 group_by(iter) %>% 
                 group_modify(make_preds) %>% 
                 ungroup %>% 
-                mutate(y_hat = rnbinom(n(), mu = mu_hat, size = 6)) %>% 
+                mutate(y_hat = rnbinom(n(), mu = mu_hat, size = m$phi[iter])) %>% 
                 pivot_longer(c(-iter, -day, -lambda, -mu_hat)) %>% 
                 group_by(day, name) %>% 
                 summarise(lower_50 = quantile(value, 0.25),

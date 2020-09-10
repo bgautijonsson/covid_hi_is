@@ -12,9 +12,9 @@ shinyUI(fluidPage(
             
             radioButtons("test", "Skimun við landamærin:",
                          c("Engin skimun" = "none",
-                            "Eingöngu fyrsta skimun" = "first",
-                           "Fyrsta skimun og seinni skimun fyrir Íslendinga" = "second_ice",
-                           "Bæði seinni og fyrri skimun fyrir alla sem koma til landsins" = "second_all")),
+                            "Ein skimun" = "first",
+                           "Tvær skimarnir fyrir Íslendinga" = "second_ice",
+                           "Tvær skimanir fyrir alla" = "second_all")),
             actionButton('go',label="Teikna myndir"),
             br(),
             br(),
@@ -26,7 +26,7 @@ shinyUI(fluidPage(
         ),
         
         mainPanel(
-            plotOutput('epidemia_plot')
+            plotOutput('epidemia_plot',height = '800px')
         )
     )
 ))
