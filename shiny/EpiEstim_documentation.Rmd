@@ -1,0 +1,19 @@
+---
+title: "COVID-19 sviðsmyndir"
+author: "Sölvi Rögnvaldsson"
+date: "9/10/2020"
+output: html_document
+---
+## Inngangur
+Á þessari heimasíðu er rýnt í sviðsmyndir COVID-19 faraldursins með hjálp faraldsfræðilegs líkans sem bygir á aðferð sem heitir EpiEstim (tilvísun). Sviðsmyndirnar byggjast á forsendum um aðgerðir á landamærum, framtíðarþróun smitstuðulsins (R) sem og virkni smitrakningar. 
+
+## Forsendur
+### Smitstuðull
+### Landamæraaðgerðir
+### Virkni smitrakningar
+
+## Stærðfræðileg framsetning
+
+## Næstu skref
+
+
