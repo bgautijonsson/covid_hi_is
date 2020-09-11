@@ -1,7 +1,13 @@
 library(shiny)
-library(gridExtra)
-
-source('../Scenario_EpiEstim.R')
+library(tidyverse)
+library(lubridate)
+library(here)
+library(ggplot2)
+library(writexl)
+library(cowplot)
+library(scales)
+library(plotly)
+library(latex2exp)
 
 # future_R <- function(R_t,t) {
 #     R_t/(log(t+20)-2)
@@ -10,102 +16,61 @@ future_R <- function(R_t,t) {
     R_t
 }
 
+icelandic_dates <- function(x) {
+    months <- c("janúar", "febrúar", "mars", "apríl", "maí", "júní", 
+                "júlí", "ágúst", "september", "október", "nóvember", "desember")
+    
+    paste0(mday(x), ". ", months[month(x)])
+}
+
 #Setting up the Shiny Server
 shinyServer(function(input, output, session) {
-    prepare_data <- reactive({
-        date <- as.Date('2020-09-09')
-        mod <- read_rds(here("Results", "Models", "EpiEstim", str_c("Model_",date,'_w_quarantine','',".rds")))
-        m <- mod$draws() %>% as_draws_df
-        d <- read_csv("https://docs.google.com/spreadsheets/d/1xgDhtejTtcyy6EN5dbDp5W3TeJhKFRRgm6Xk0s0YFeA/export?format=csv&gid=1788393542",col_types=cols()) %>%
-            select(date = Dagsetning, local = Innanlands_Smit,border_1=Landamaeri_Smit_1,border_2=Landamaeri_Smit_2,
-                   imported = Innflutt_Smit,prop_quarantine=Hlutf_Sottkvi, num_quarantine=Fjoldi_Sottkvi) %>% 
-            mutate(date = ymd(date),
-                   total = local + imported,
-                   prop_quarantine_and_border=if_else(input$quarantine & total!=0,(num_quarantine+border_1+border_2)/total,0)) %>% 
-            filter(date >= ymd("2020-02-28"))
-        SI <- get_SI_vec(nrow(d))
-        d <- mutate(d,lambda=calculate_lambda(total,SI,prop_quarantine))
-        R_draws <- spread_draws(m, R[day]) %>% 
-                    group_by(day) %>% 
-                    mutate(iter = row_number()) %>%
-                    ungroup %>% 
-                    select(iter, day, R)
-        return(list('m'=m,'R_draws'=R_draws,'d'=d))
-    }) 
-    
     get_scenario_dat<-eventReactive(input$go,{
         theme_set(theme_classic(base_size = 12) + 
                       theme(legend.position = "none"))
-        pred_days <- 42
-        date <- as.Date('2020-09-09')
-        dat_list <- prepare_data()
+
+        load(here('shiny', 'data', str_c('border_', input$test, '_quarantine_', input$quarantine, '.Rdata')))
+         plot_dat <- plot_dat %>% filter(prob %in% input$confidence)
         
-        prop_imported = 0
-        
-        if(input$test == "first") prop_imported = 0.000812513
-        else if(input$test == 'none') prop_imported = 0.001290147
-        else if(input$test == 'second_ice') prop_imported = 0.000510378
-        
-        future_prop_quarantine = rep(0,pred_days-1)
-        if(input$quarantine) {
-            for(i in 1:(pred_days-1)) {
-                future_prop_quarantine[i] = 1/(1+exp(5-i*10/42))
-            }
-        }
-        
-        plot_dat <- scenario(m=dat_list$m,d=dat_list$d, R_draws=dat_list$R_draws, R_fun = future_R, future_prop_quarantine=future_prop_quarantine, prop_imported=prop_imported,pred_days=42,use_quarantine=T)
-        
-        p5 <- plot_dat %>% 
-            filter(name == "y_hat") %>% 
-            ggplot(aes(date, ymin = lower, ymax = upper)) +
-            geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
-            geom_point(data = d %>% rename(y_hat = local) %>% pivot_longer(c(y_hat)),
-                       inherit.aes = F, aes(x = date, y = value)) +
-            geom_vline(xintercept = date, lty = 2) +
-            scale_x_date(date_breaks = "month", 
-                         date_labels = "%B %d",
-                         limits = c(ymd("2020-02-27"), date + 1 + pred_days), 
-                         expand = expansion(add = 0)) +
-            scale_y_continuous(expand = expansion(mult = 0.01)) +
-            scale_fill_brewer() +
-            labs(subtitle = "Ný smit") +
-            theme(axis.title = element_blank(),
-                  plot.margin = margin(5, 5, 5, 5),
-                  legend.title = element_blank()) 
-        
-        p6 <- plot_dat %>% 
-            filter(name == "R") %>% 
-            ggplot(aes(date, ymin = lower, ymax = upper)) +
-            geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
-            geom_hline(yintercept = 1, lty = 2) +
-            geom_vline(xintercept = date, lty = 2) +
-            scale_x_date(date_breaks = "month", 
-                         date_labels = "%B %d",
-                         limits = c(ymd("2020-02-27"), date + 1 + pred_days), 
-                         expand = expansion(add = 0)) +
-            scale_y_continuous(expand = expansion(mult = 0.01), breaks = pretty_breaks(8)) +
-            scale_fill_brewer() +
-            ggtitle(label = waiver(),
-                    subtitle = latex2exp::TeX("$R_t$")) +
-            theme(axis.title = element_blank(),
-                  plot.margin = margin(5, 5, 5, 8))
-        
-        # median_dat <- plot_dat %>% 
-        #                 filter(name == "y_hat", date>=date, prob==50) %>%
-        #                 mutate(cum_cases=cumsum((lower+upper)/2))
-        # 
-        # median_plot <- ggplot(median_dat,aes(date, cum_cases)) +
-        #                 geom_line(col = "#0065ad", alpha = 0.7) +
-        #                 geom_vline(xintercept = date, lty = 2) +
-        #                 scale_x_date(breaks = seq(date,date+pred_days+1,by=7), 
-        #                              date_labels = "%B %d",
-        #                              limits = c(date, date + 1 + pred_days), 
-        #                              expand = expansion(add = 0)) +
-        #                 labs(subtitle = "Uppöfnuð spáð smit")+
-        #                 theme(axis.title = element_blank(),
-        #                       plot.margin = margin(5, 5, 5, 5),
-        #                       legend.title = element_blank()) 
-                    
+         start_date = Sys.Date()
+         if(input$xlim == 'from_start') start_date = ymd('2020-02-27')
+         else if(input$xlim == 'from_second_wave') start_date = ymd('2020-07-20')
+    
+         p5 <- plot_dat %>%
+             filter(name == "y_hat") %>%
+             ggplot(aes(date, ymin = lower, ymax = upper)) +
+             geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
+             geom_point(data = d %>% rename(y_hat = local) %>% pivot_longer(c(y_hat)),
+                        inherit.aes = F, aes(x = date, y = value)) +
+             geom_vline(xintercept = date, lty = 2) +
+             scale_x_date(date_breaks = "month",
+                          labels = icelandic_dates,
+                          limits = c(start_date, date + 1 + pred_days),
+                          expand = expansion(add = 0)) +
+             scale_y_continuous(expand = expansion(mult = 0.01)) +
+             scale_fill_brewer() +
+             labs(subtitle = "Ný smit") +
+             theme(axis.title = element_blank(),
+                   plot.margin = margin(5, 5, 5, 5),
+                   legend.title = element_blank())
+
+         p6 <- plot_dat %>%
+             filter(name == "R") %>%
+             ggplot(aes(date, ymin = lower, ymax = upper)) +
+             geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
+             geom_hline(yintercept = 1, lty = 2) +
+             geom_vline(xintercept = date, lty = 2) +
+             scale_x_date(date_breaks = "month",
+                          labels = icelandic_dates,
+                          limits = c(start_date, date + 1 + pred_days),
+                          expand = expansion(add = 0)) +
+             scale_y_continuous(expand = expansion(mult = 0.01), breaks = pretty_breaks(8)) +
+             scale_fill_brewer() +
+             ggtitle(label = waiver(),
+                 subtitle = latex2exp::TeX("$R_t$")) +
+             theme(axis.title = element_blank(),
+                   plot.margin = margin(5, 5, 5, 8))
+
         plot_grid(p5, p6, ncol = 1)
     }) 
     
@@ -117,24 +82,23 @@ shinyServer(function(input, output, session) {
     })
 
     output$downloadPlot <- downloadHandler(
-        filename<-function(){
-            paste(gsub(" ","-",input$title),"-",format(date, "%b-%d-%Y"), ".pdf", sep="")
-        },
-        content=function(file=NULL) {
-            pdf(file,width=9,height=6)
-            if (is.null(epidemia_plot())) return(NULL)
-            epi_estim_plot(quar=input$quarantine, first_test=input$first_test, second_test=input$second_test)
-            dev.off()
+        filename = function() {'COVID_19_svidsmynd.pdf'},
+        content = function(file) {
+            p = get_scenario_dat()
+            ggsave(file, plot = p,width=8, height=6, device = 'pdf')
         }
     )
     
     output$downloadCSV <- downloadHandler(
-        filename <- function() {
-            return('ModelEstimateTable')
-        },
-        content <- function(file=NULL) {
-            csv(file)
-            dev.off()
+        filename = function() { "COVID_19_svidsmynd.xlsx"},
+        content = function(file) {
+            load(here('shiny', 'data', str_c('border_', input$test, '_quarantine_', input$quarantine, '.Rdata')))
+            plot_dat <- plot_dat %>% ungroup() %>%
+                select(date,name, prob, lower, upper) %>% 
+                filter(name %in% c('R', 'y_hat')) %>% 
+                mutate(name=if_else(name == 'y_hat', "Spáð smit", "R")) %>%
+                rename(Dagsetning = date, Staerd=name, Nedri_mork=lower, Efri_mork=upper, Tegund_spabils=prob)
+            write_xlsx(plot_dat, path = file)
         }
     )
 })
