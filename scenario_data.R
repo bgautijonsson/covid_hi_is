@@ -7,7 +7,7 @@ d <- read_csv("https://docs.google.com/spreadsheets/d/1xgDhtejTtcyy6EN5dbDp5W3Te
     mutate(date = ymd(date),
            total = local + imported,
            prop_quarantine_and_border=if_else(total!=0,(num_quarantine+border_1+border_2)/total,0)) %>% 
-    filter(date >= ymd('2020-02-28'))
+    filter(date >= ymd('2020-02-28') & date<ymd('2020-09-09'))
 SI <- get_SI_vec(nrow(d))
 d <- mutate(d,lambda=calculate_lambda(total,SI,prop_quarantine))
 R_draws <- spread_draws(m, R[day]) %>% 
@@ -23,10 +23,9 @@ future_R <- function(R_t,t) {
 theme_set(theme_classic(base_size = 12) + 
               theme(legend.position = "none"))
 pred_days <- 42
-date <- as.Date('2020-09-09')
-dat_list <- prepare_data()
 
-prop_imported = c(0.00106502,0.001929385,0.002662551)
+#prop_imported = c(0.00106502,0.001929385,0.002662551)
+prop_imported = c(0,0.001929385,0.002662551)
 
 future_prop_quarantine = matrix(0,ncol=4,nrow=41)
 

@@ -14,7 +14,7 @@ shinyUI(fluidPage(
                                  c("Engin skimun" = "no_test",
                                     "Ein skimun fyrir alla" = "first_test",
                                    "Tvær skimanir fyrir alla" = "second_test")),
-                    radioButtons('quarantine', 'Smitrakning skilar árangri við sér:',
+                    radioButtons('quarantine', 'Smitrakning skilar árangri:',
                                  c('Strax' = 'now', 
                                    'Eftir eina viku' = 'after_one_week',
                                    'Eftir tvær vikur' = 'after_two_weeks',

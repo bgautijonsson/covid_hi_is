@@ -47,7 +47,7 @@ shinyServer(function(input, output, session) {
                           labels = icelandic_dates,
                           limits = c(start_date, date + 1 + pred_days),
                           expand = expansion(add = 0)) +
-             scale_y_continuous(expand = expansion(mult = 0.01)) +
+             scale_y_continuous(expand = expansion(mult = 0.01),breaks = pretty_breaks(8)) +
              scale_fill_brewer() +
              labs(subtitle = "Ný smit") +
              theme(axis.title = element_blank(),
