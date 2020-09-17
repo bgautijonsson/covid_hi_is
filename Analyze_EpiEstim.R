@@ -48,14 +48,15 @@ p1 <- d %>%
     geom_vline(xintercept = ymd("2020-05-04"), lty = 2) +
     geom_vline(xintercept = ymd("2020-06-15"), lty = 2) +
     geom_vline(xintercept = ymd("2020-07-31"), lty = 2) +
+    geom_vline(xintercept = ymd("2020-08-19"), lty = 2) +
     scale_fill_brewer(type = "qual", palette = "Set1") +
     scale_x_date(breaks = c(ymd(c("2020-03-01", 
                                   "2020-03-16", "2020-03-24",
                                   "2020-05-04",
                                   "2020-06-15",
                                   "2020-07-31",
-                                  "2020-09-01",
-                                  "2020-08-16"))),
+                                  "2020-08-16",
+                                  "2020-09-01"))),
                  date_labels = "%B %d",
                  expand = expansion(add = 0),
                  limits = c(ymd("2020-02-27"), Sys.Date() + 1)) +
@@ -93,6 +94,7 @@ p2 <- spread_draws(m, R[day]) %>%
     geom_vline(xintercept = ymd("2020-05-04"), lty = 2) +
     geom_vline(xintercept = ymd("2020-06-15"), lty = 2) +
     geom_vline(xintercept = ymd("2020-07-31"), lty = 2) +
+    geom_vline(xintercept = ymd("2020-08-19"), lty = 2) +
     geom_hline(yintercept = 1, lty = 2) +
     scale_fill_brewer() +
     scale_x_date(breaks = c(ymd(c("2020-03-01", "2020-04-01",
@@ -153,8 +155,6 @@ p3 <- spread_draws(m, y_hat[day]) %>%
           plot.margin = margin(5, 5, 5, 11),
           legend.title = element_blank()) 
 
-plot_grid(p3, p4, ncol = 1)
-
 p4 <- spread_draws(m, R[day]) %>% 
     group_by(day) %>% 
     summarise(lower_50 = quantile(R, 0.25),
@@ -191,6 +191,8 @@ p4 <- spread_draws(m, R[day]) %>%
             subtitle = latex2exp::TeX("$R_t$")) +
     theme(axis.title = element_blank(),
           plot.margin = margin(5, 5, 5, 14))
+
+plot_grid(p3, p4, ncol = 1)
 
 plot_dat <- spread_draws(m, R[day]) %>% 
     group_by(day) %>% 
@@ -300,13 +302,13 @@ last_R <- R_draws %>%
     filter(day == max(day)) %>% 
     .$R
 
-pred_days <- 42
+pred_days <- 91
 N_iter <- 2000
 future_R <- crossing(day = max(R_draws$day) + seq_len(pred_days),
                      iter = seq_len(N_iter)) %>% 
     group_by(iter) %>% 
-    mutate(R = mean(last_R) + (last_R[iter] - mean(last_R)) + scale(day - max(R_draws$day), center = F) - 0.4 * scale(day - max(R_draws$day), center = F)^2,
-           R = as.numeric(R) + cumsum(rnorm(n(), sd = 0.02))) %>% 
+    mutate(R = last_R[iter] + 0.9 * scale(day - max(R_draws$day) - 1, center = F) - 0.5 * scale(day - max(R_draws$day), center = F)^2,
+           R = as.numeric(R) + cumsum(rnorm(n(), mean = - 0.01 * (R - 0.8), sd = 0.01))) %>% 
     ungroup
 
 future_R %>% 
@@ -366,7 +368,7 @@ plot_dat <- R_draws %>%
     group_by(iter) %>% 
     group_modify(make_preds) %>% 
     ungroup %>% 
-    mutate(y_hat = rnbinom(n(), mu = mu_hat, size = 6)) %>% 
+    mutate(y_hat = rnbinom(n(), mu = mu_hat, size = m$phi[iter])) %>% 
     pivot_longer(c(-iter, -day, -lambda, -mu_hat)) %>% 
     group_by(day, name) %>% 
     summarise(lower_50 = quantile(value, 0.25),
