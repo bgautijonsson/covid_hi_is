@@ -1,0 +1,13 @@
+name: COVID19_Predictions
+title: COVID19_Predictions
+username:
+account: bgautijonsson
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2663487
+bundleId: 3699220
+url: https://bgautijonsson.shinyapps.io/COVID19_Predictions/
+when: 1601752994.61174
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: public_app.R

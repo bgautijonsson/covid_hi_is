@@ -1,0 +1,13 @@
+name: Prediction_App
+title: Prediction_App
+username:
+account: bgautijonsson
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2663533
+bundleId: 3515376
+url: https://bgautijonsson.shinyapps.io/Prediction_App/
+when: 1597400000.07631
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: app.R

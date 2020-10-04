@@ -183,5 +183,6 @@ Make_Model_Preds <- function(fit_date = Sys.Date()) {
     
     write_csv(results, here("Results", "Predictions", str_c("Predictions_", fit_date, ".csv")))
     write_rds(results, here("Results", "Predictions", str_c("Predictions_", fit_date, ".rds")))
+    write_csv(results, here("Prediction_App", "shiny_preds.csv"))
     
 }
