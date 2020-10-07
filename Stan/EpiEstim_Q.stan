@@ -43,6 +43,9 @@ parameters {
   // x = mu + sigma * z, where z ~ normal(0, 1)
   // instead of x ~ normal(mu, sigma))
   vector[N_days - 3] error;
+  
+  real b_sin;
+  real b_cos;
 } 
 
 transformed parameters {
@@ -66,7 +69,7 @@ transformed parameters {
   // df2dt2 = (f(t) - f(t - 1)) - (f(t - 1) - f(t - 2)) = f(t) - 2f(t - 1) + f(t - 2) ~ normal(0, sigma)
   // Instead write f(t) ~ normal(2f(t - 1) - f(t - 2), sigma)
   for (t in 3:(N_days - 1)) {
-    log_R[t] = 2 * log_R[t - 1] - log_R[t - 2] + sigma_R * error[t - 2];
+    log_R[t] = 2 * log_R[t - 1] - log_R[t - 2] + sigma_R * error[t - 2] + b_sin * sin(t * 2 * pi() / 7);
     R[t] = exp(log_R[t]);
   }
   

@@ -16,10 +16,27 @@ theme_set(theme_classic(base_size = 12) +
 
 d <- read_xlsx("Data/aldurshopar.xlsx") %>% 
     janitor::clean_names() %>% 
+    filter(smit == "Innanlands") %>% 
     mutate(date = as_date(upphaf_einangrunar)) %>% 
     select(date, age = aldursflokkur_10_80, tegund = smit) %>% 
     count(date, age) %>% 
+    complete(age, date, fill = list("n" = 0)) %>% 
     filter(date >= ymd("2020-03-01"))
+
+d %>% 
+    mutate(age = ifelse(age == 80, "80+", str_c(age, " - ", age + 9))) %>% 
+    ggplot(aes(date, n)) +
+    geom_line(dat = d %>% rename(age2 = age), inherit.aes = F,
+              aes(x = date, y = n, group = age2), alpha = 0.1) +
+    geom_line(aes(col = age, group = age)) +
+    scale_y_continuous(limits = c(0, NA), expand = expansion(mult = 0)) +
+    scale_colour_brewer(type = "qual", palette = "Set1") +
+    facet_wrap("age") +
+    labs(title = "Nýgreind smit eftir aldri",
+         x = "Dagsetning",
+         y = "Fjöldi") +
+    ggsave("smit_aldur.png", device = "png",
+           width = 5, height = 5, scale = 2)
 
 
 

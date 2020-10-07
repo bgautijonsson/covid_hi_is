@@ -41,24 +41,25 @@ Make_EpiEstim_Q_Model <- function(end_date = Sys.Date(), start_date=NULL,
         SI_rate = 0.28,
         local = local,
         total = total,
-        prop_quarantine=prop_quarantine
+        prop_quarantine=prop_quarantine,
+        pred_days = 14
     )
     
-    mod <- cmdstan_model(here("Stan", "EpiEstim_Q.stan"))
+    mod <- cmdstan_model(here("Stan", "EpiEstim_Q_GP.stan"))
     
     fit <- mod$sample(
         data = stan_data, 
-        show_messages = FALSE, 
+        show_messages = TRUE, 
         chains = chains, 
         parallel_chains = chains,
         iter_sampling = iters,
         iter_warmup = warmup,
-        max_treedepth = 15,
-        adapt_delta = 0.9,
         init = 0,
-        refresh = 100
+        refresh = 10
     )
     
-    fit$save_object(file = here("Results", "Models", "EpiEstim", str_c("Model_", Sys.Date(),".rds")))
+    fit$save_object(file = here("Results", "Models", "EpiEstim", str_c("GP_Model_", Sys.Date(),".rds")))
     
 }
+
+Make_EpiEstim_Q_Model(iters = 500, warmup = 500)

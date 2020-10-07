@@ -1,6 +1,6 @@
-# source("Make_Stan_Data.R")  
-# source("Make_IGLGM_Model.R")
-# source("Make_Model_Preds.R")
+source("Make_Stan_Data.R")
+source("Make_IGLGM_Model.R")
+source("Make_Model_Preds.R")
 source("Make_EpiEstim_Q_Model.R")
 # source("Make_Figures.R")
 
@@ -8,7 +8,7 @@ source("Make_EpiEstim_Q_Model.R")
 
 # Make_Model_Preds()
 
-Make_EpiEstim_Q_Model(warmup = 1000, iter = 1000, chains = 4)
+Make_EpiEstim_Q_Model(warmup = 500, iter = 500, chains = 4)
 
 
 # Make_Figures()

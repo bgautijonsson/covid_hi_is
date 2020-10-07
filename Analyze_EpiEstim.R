@@ -69,7 +69,7 @@ p1 <- d %>%
     theme(axis.title = element_blank(),
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank(),
-          plot.margin = margin(5, 5, 5, 5),
+          plot.margin = margin(5, 5, 5, 16),
           legend.position = c(0.28, 0.8), 
           legend.title = element_blank())
 
@@ -113,16 +113,18 @@ p2 <- spread_draws(m, R[day]) %>%
                  date_labels = "%B %d",
                  expand = expansion(add = 0),
                  limits = c(ymd("2020-02-27"), Sys.Date() + 1)) +
-    scale_y_continuous(breaks = pretty_breaks(8)) +
+    scale_y_continuous(breaks = pretty_breaks(8),
+                       expand = expansion(mult = 0)) +
     ggtitle(label = waiver(),
             subtitle = latex2exp::TeX("$R_t$")) +
+    coord_cartesian(ylim = c(0, 8), xlim = c(ymd("2020-02-27"), Sys.Date() + 1)) +
     theme(axis.title = element_blank(),
-          plot.margin = margin(5, 5, 5, 8))
+          plot.margin = margin(5, 5, 5, 27))
 
 p2b <- spread_draws(m, R[day]) %>% 
     arrange(day) %>% 
     group_by(.chain, .iteration, .draw) %>% 
-    mutate(change = exp(diff(c(NA, log(R)))) - 1) %>% 
+    mutate(change = diff(c(NA, R))) %>% 
     drop_na(change) %>% 
     group_by(day) %>% 
     summarise(lower_50 = quantile(change, 0.25),
@@ -163,11 +165,13 @@ p2b <- spread_draws(m, R[day]) %>%
                  date_labels = "%B %d",
                  expand = expansion(add = 0),
                  limits = c(ymd("2020-02-27"), Sys.Date() + 1)) +
-    scale_y_continuous(breaks = pretty_breaks(8), labels = label_percent()) +
+    scale_y_continuous(breaks = pretty_breaks(5), 
+                       expand = expansion(mult = 0)) +
+    coord_cartesian(ylim = c(-1, 1.5)) +
     ggtitle(label = waiver(),
-            subtitle = latex2exp::TeX("Between-day % change in $R_t$")) +
+            subtitle = latex2exp::TeX("Between-day change in $R_t$")) +
     theme(axis.title = element_blank(),
-          plot.margin = margin(5, 5, 5, 8))
+          plot.margin = margin(5, 5, 5, 2))
 
 
 
@@ -372,6 +376,8 @@ spread_draws(m, R[day], phi) %>%
     ggsave("afleidd_smit.png", device = "png",
            width = 5, height = 0.5 * 5, scale = 2)
 
+#### Sviðsmyndir ####
+
 
 R_draws <- spread_draws(m, R[day]) %>% 
     group_by(day) %>% 
@@ -383,18 +389,17 @@ last_R <- R_draws %>%
     filter(day == max(day)) %>% 
     .$R
 
-pred_days <- 56
-R_days <- 14
-N_iter <- 4000
+pred_days <- 14
+R_days <- 18
+N_iter <- 2000
 final_R <- 0.4
-
 future_R <- crossing(day = seq_len(pred_days),
                      iter = seq_len(N_iter)) %>% 
     group_by(iter) %>% 
     mutate(R = last_R[iter],
            log_R = log(R),
-           log_R = log_R + 0.1 * day,
-           perc = pmin((day - 1) / rnorm(1, mean = R_days, sd = 2), rnorm(1, mean = 1, sd = 0.02)),
+           perc = pmin((day - 1) / rnorm(1, mean = R_days, sd = 2), rnorm(1, mean = 1, sd = 0.1)),
+           log_R = log_R + 0.05 * day * (1 - pmin(day / R_days, 1)),
            log_R = log_R - perc^1.5 * (log_R - log(final_R)),
            R = exp(log_R),
            day = max(R_draws$day) + day) %>%
@@ -402,6 +407,7 @@ future_R <- crossing(day = seq_len(pred_days),
     select(-log_R, -perc)
 
 future_R %>% 
+    filter(iter %in% sample(1:N_iter, size = 200)) %>% 
     ggplot(aes(day - min(day), R, group = iter)) +
     geom_line(alpha = 0.1) +
     geom_hline(yintercept = 1, lty = 2)
@@ -410,9 +416,11 @@ future_R %>%
 
 R_draws %>% 
     bind_rows(future_R) %>% 
-    ggplot(aes(day, R, group = iter)) +
+    filter(iter %in% sample(1:N_iter, size = 100)) %>% 
+    ggplot(aes(ymd("2020-02-28") + day, R, group = iter)) +
     geom_line(alpha = 0.01) +
-    geom_hline(yintercept = 1, lty = 2)
+    geom_hline(yintercept = 1, lty = 2) +
+    scale_x_date(date_breaks = "month")
 
 shape <- 1.54
 rate <- 0.28
@@ -443,11 +451,20 @@ lambda2 <- c(lambda2, rep(0, pred_days))
 
 make_preds <- function(d, ...) {
     perc_q <- unique(d$perc_q2)
+    start_day <- 221
+    q_change_time <- 7
+    start_percq <- 0.5
+    
+    q <- numeric(nrow(d) - N_days + 1)
+    
+    q <- 0.5 - pmin(seq_along(q)/q_change_time, 1) * (0.5 - perc_q)
     for (t in seq(N_days, nrow(d))) {
-        d$lambda1[t] <- t((1 - perc_q) * d$mu_hat[(t - 1):(t - length(SI) + 1)]) %*% head(SI, -1)
-        d$lambda2[t] <- t(perc_q * d$mu_hat[(t - 1):(t - length(SI) + 1)]) %*% head(SI, -1)
+        d$lambda1[t] <- t((1 - q[t - N_days + 1]) * d$mu_hat[(t - 1):(t - length(SI) + 1)]) %*% head(SI, -1)
+        d$lambda2[t] <- t(q[t - N_days + 1] * d$mu_hat[(t - 1):(t - length(SI) + 1)]) %*% head(SI, -1)
         d$mu_hat[t] <- d$lambda1[t] * d$R[t] + d$R_q[t] * d$lambda2[t]
     }
+    
+    d$prop_quarantine[(N_days):nrow(d)] <- q
     
     d
 }
@@ -455,9 +472,13 @@ make_preds <- function(d, ...) {
 
 
 sim_dat <- R_draws %>% 
-    bind_rows(future_R) %>% 
-    expand_grid(perc_q = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)) %>% 
-    filter(iter %in% 1:1000) %>%
+    mutate(prop_quarantine = d$prop_quarantine[day]) %>% 
+    bind_rows(future_R %>% mutate(prop_q = 0)) %>% 
+    expand_grid(
+        perc_q = c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+        # perc_q = 0.5
+    ) %>% 
+    # filter(iter %in% 1:1000) %>%
     group_by(iter, perc_q) %>% 
     mutate(lambda1 = lambda1[-1],
            lambda2 = lambda2[-1],
@@ -468,7 +489,9 @@ sim_dat <- R_draws %>%
     ungroup %>% 
     mutate(new_cases = rnbinom(n(), mu = mu_hat, size = m$phi[iter])) %>% 
     group_by(iter, perc_q) %>% 
-    mutate(total_cases = cumsum(new_cases))
+    mutate(total_cases = cumsum(new_cases)) %>% 
+    ungroup %>% 
+    select(-perc_q2)
 
 plot_dat <- sim_dat %>% 
     mutate(date = ymd("2020-02-28") + day) %>%
@@ -493,6 +516,7 @@ plot_dat <- sim_dat %>%
     pivot_wider(names_from = which, values_from = value) %>% 
     mutate(prob = parse_number(prob))
 
+
 plot_dat %>% 
     ggplot(aes(perc_q, ymin = lower, ymax = upper)) +
     geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
@@ -513,7 +537,7 @@ plot_dat %>%
     scale_fill_brewer() +
     scale_x_continuous(labels = label_percent(), limits = c(0, 1), expand = expansion(mult = 0)) +
     labs(x = "Hlutfall í sóttkví",
-         y = "Heildarfjöldi greindr smita (LOG skali)",
+         y = "Heildarfjöldi greindr smita",
          title = "Heildarfjöldi smitaðra milli 4. og 31. október",
          subtitle = "Sýnt sem fall af % í sóttkví við greiningu") +
     theme(plot.margin = margin(5, 15, 5, 5)) +
@@ -521,12 +545,9 @@ plot_dat %>%
            width = 5, height = 0.5 * 5, scale = 2)
 
 
-#### Sviðsmyndir ####
-    
 plot_dat <- sim_dat %>% 
-    filter(perc_q == 0.75) %>% 
-    pivot_longer(c(-iter, -day, -lambda1, -lambda2, -mu_hat)) %>% 
-    group_by(day, name) %>% 
+    pivot_longer(c(R, new_cases, total_cases, prop_quarantine)) %>% 
+    group_by(day, name, perc_q) %>% 
     summarise(lower_50 = quantile(value, 0.25),
               upper_50 = quantile(value, 0.75),
               lower_60 = quantile(value, 0.2),
@@ -539,25 +560,56 @@ plot_dat <- sim_dat %>%
               upper_90 = quantile(value, 0.95),
               lower_95 = quantile(value, 0.025),
               upper_95 = quantile(value, 0.975)) %>% 
-    pivot_longer(c(-day, -name), names_to = c("which", "prob"), names_sep = "_") %>% 
+    pivot_longer(c(-day, -name, -perc_q), names_to = c("which", "prob"), names_sep = "_") %>% 
     pivot_wider(names_from = which, values_from = value) %>% 
     mutate(prob = parse_number(prob),
            date = ymd("2020-02-28") + day)
 
+
+plot_dat %>% 
+    filter(name %in% c("new_cases", "total_cases", "prop_quarantine"), 
+           perc_q %in% c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)) %>% 
+    mutate(line = ifelse(name == "prop_quarantine", lower, NA)) %>% 
+    mutate(name = fct_recode(name,
+                             "Dagleg smit" = "new_cases",
+                             "Uppsöfnuð smit" = "total_cases",
+                             "Hlutfall í sóttkví" = "prop_quarantine"),
+           perc_q = label_percent()(perc_q)) %>% 
+    ggplot(aes(date, ymin = lower, ymax = upper)) +
+    geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
+    geom_line(aes(y = line)) +
+    geom_vline(xintercept = Sys.Date(), lty = 2) +
+    scale_x_date(date_breaks = "month", 
+                 date_labels = "%b",
+                 limits = c(ymd("2020-07-23"), Sys.Date() + 1 + pred_days), 
+                 expand = expansion(add = 0)) +
+    scale_y_continuous(expand = expansion(mult = 0)) +
+    scale_fill_brewer() +
+    facet_grid(name ~ perc_q, scales = "free") +
+    labs(title = "Fjöldi smita eftir hlutfalli í sótthví við greiningu",
+         subtitle = "Miðað við imyndaðan feril á smitstuðli") +
+    coord_cartesian(xlim = ymd(c("2020-09-01", NA))) +
+    theme(plot.margin = margin(5, 25, 5, 15),
+          axis.title = element_blank(),
+          axis.text.x = element_text(size = 6), 
+          panel.spacing = unit(0.5, "cm")) +
+    ggsave("sottkvi_samanburdur.png", device = "png",
+           width = 5, height = 0.621 * 5, scale = 2)
+
 p5 <- plot_dat %>% 
-    filter(name == "new_cases") %>% 
+    filter(name == "new_cases", perc_q == 0.5) %>% 
     ggplot(aes(date, ymin = lower, ymax = upper)) +
     geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
     geom_point(data = d %>% rename(new_cases = local) %>% pivot_longer(c(new_cases)),
-               inherit.aes = F, aes(x = date, y = value), size = 0.8) +
-    geom_vline(xintercept = Sys.Date(), lty = 2) +
+               inherit.aes = F, aes(x = date, y = value), size = 1) +
+    geom_vline(xintercept = Sys.Date() - 1, lty = 2) +
     scale_x_date(date_breaks = "month", 
                  date_labels = "%B %d",
                  limits = c(ymd("2020-02-27"), Sys.Date() + 1 + pred_days), 
                  expand = expansion(add = 0)) +
     scale_y_continuous(expand = expansion(mult = 0)) +
     scale_fill_brewer() +
-    labs(subtitle = "New local cases") +
+    labs(subtitle = "Dagleg smit innanlands") +
     theme(axis.title = element_blank()) +
     theme(axis.title = element_blank(),
           axis.ticks.x = element_blank(),
@@ -571,14 +623,14 @@ p6 <- plot_dat %>%
     geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
     geom_point(data = d %>% mutate(total_cases = cumsum(local)) %>% pivot_longer(c(total_cases)),
                inherit.aes = F, aes(x = date, y = value), size = 0.8) +
-    geom_vline(xintercept = Sys.Date(), lty = 2) +
+    geom_vline(xintercept = Sys.Date() - 1, lty = 2) +
     scale_x_date(date_breaks = "month", 
                  date_labels = "%B %d",
                  limits = c(ymd("2020-02-27"), Sys.Date() + 1 + pred_days), 
                  expand = expansion(add = 0)) +
     scale_y_continuous(expand = expansion(mult = 0)) +
     scale_fill_brewer() +
-    labs(subtitle = "Total local cases") +
+    labs(subtitle = "Uppsöfnuð smit innanlands") +
     theme(axis.title = element_blank()) +
     theme(axis.title = element_blank(),
           axis.ticks.x = element_blank(),
@@ -590,23 +642,33 @@ p7 <- plot_dat %>%
     filter(name == "R") %>% 
     ggplot(aes(date, ymin = lower, ymax = upper)) +
     geom_ribbon(aes(fill = factor(-prob)), alpha = 0.7) +
-    geom_hline(yintercept = 1, lty = 2) +
-    geom_vline(xintercept = Sys.Date(), lty = 2) +
-    scale_x_date(date_breaks = "month", date_labels = "%B %d",
+    geom_hline(yintercept = 1, lty = 1, col = "salmon") +
+    geom_vline(xintercept = Sys.Date() - 1, lty = 2) +
+    scale_x_date(date_breaks = "month", 
+                 labels  = icelandic_dates,
                  limits = c(ymd("2020-02-27"), Sys.Date() + 1 + pred_days), 
                  expand = expansion(add = 0)) +
     scale_y_continuous(expand = expansion(mult = 0), breaks = pretty_breaks(8)) +
     scale_fill_brewer() +
-    ggtitle(label = waiver(),
-            subtitle = latex2exp::TeX("$R_t$")) +
+    labs(subtitle = "Smitstuðull") +
     theme(axis.title = element_blank(),
           plot.margin = margin(5, 25, 5, 25))
 
-plot_grid(p5, p6, p7, ncol = 1) +
-    ggsave("svidsmynd.png", device = "png",
+plot_grid(p5, p7, ncol = 1) +
+    ggsave("svidsmynd_nototal.png", device = "png",
+           width = 5, height = 5, scale = 2)
+
+
+plot_grid(p5 + coord_cartesian(xlim = ymd(c("2020-07-01", NA))),
+          p7 + coord_cartesian(xlim = ymd(c("2020-07-01", NA))),
+          ncol = 1) +
+    ggsave("svidsmynd_nototal_1juli.png", device = "png",
            width = 5, height = 5, scale = 2)
 
 
 
-
-
+plot_grid(p5 + coord_cartesian(xlim = ymd(c("2020-09-01", NA))),
+          p7 + coord_cartesian(xlim = ymd(c("2020-09-01", NA))),
+          ncol = 1) +
+    ggsave("svidsmynd_no_total_1sept.png", device = "png",
+           width = 5, height = 5, scale = 2)
